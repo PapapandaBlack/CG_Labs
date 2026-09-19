@@ -5,6 +5,8 @@
 #include <d3dx12.h>
 #include <SimpleMath.h>
 
+#include "texture_model.h"
+
 using namespace DirectX::SimpleMath;
 
 class GameObj
@@ -53,6 +55,11 @@ private:
     D3D12_INDEX_BUFFER_VIEW m_ibv{};
     UINT m_indexCount = 0;
 
+    std::vector<MeshPart> m_parts;
+    std::vector<SurfaceMaterial> m_materials;
+
+    UINT m_textureSrvStart = 0;
+
 public:
     MeshObject(
         UINT cbvIndex,
@@ -64,6 +71,11 @@ public:
         ID3D12GraphicsCommandList* cmdList,
         D3D12_GPU_DESCRIPTOR_HANDLE cbvHeapStart,
         UINT cbvDescriptorSize) const override;
+
+    void SetMaterials(
+        const std::vector<MeshPart>& parts,
+        const std::vector<SurfaceMaterial>& materials,
+        UINT textureSrvStart);
 };
 
 #endif

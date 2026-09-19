@@ -121,15 +121,119 @@ void App::CreateRTVAndDSVDescriptorHeaps()
     Fail(Device->CreateDescriptorHeap(&DSVHeapDesc, IID_PPV_ARGS(&HeapDSV)));
 }
 
+//void App::CreateCBVDescriptorHeap()
+//{
+//    D3D12_DESCRIPTOR_HEAP_DESC CBVHeapDesc = {};
+//    CBVHeapDesc.NumDescriptors = ObjectsMax;
+//    CBVHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+//    CBVHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+//    CBVHeapDesc.NodeMask = 0;
+//
+//    Fail(Device->CreateDescriptorHeap(&CBVHeapDesc, IID_PPV_ARGS(&HeapCBV)));
+//}
+
 void App::CreateCBVDescriptorHeap()
 {
-    D3D12_DESCRIPTOR_HEAP_DESC CBVHeapDesc = {};
-    CBVHeapDesc.NumDescriptors = ObjectsMax;
-    CBVHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    CBVHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    CBVHeapDesc.NodeMask = 0;
+    if (objParser.GetMaterials().size() > TextureMax)
+    {
+        throw std::runtime_error(
+            "Too many materials. Maximum: " +
+            std::to_string(TextureMax));
+    }
 
-    Fail(Device->CreateDescriptorHeap(&CBVHeapDesc, IID_PPV_ARGS(&HeapCBV)));
+    D3D12_DESCRIPTOR_HEAP_DESC heapDescription = {};
+
+    heapDescription.NumDescriptors =
+        ObjectsMax + TextureMax;
+
+    heapDescription.Type =
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+
+    heapDescription.Flags =
+        D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+
+    heapDescription.NodeMask = 0;
+
+    Fail(Device->CreateDescriptorHeap(
+        &heapDescription,
+        IID_PPV_ARGS(&HeapCBV)));
+
+    CreateTextures();
+}
+
+void App::CreateTextures()
+{
+    const auto& materials = objParser.GetMaterials();
+
+    if (materials.empty())
+    {
+        throw std::runtime_error(
+            "Load the model before creating textures");
+    }
+
+    if (materials.size() > TextureMax)
+    {
+        throw std::runtime_error(
+            "Too many materials for the texture descriptor heap");
+    }
+
+    FlushCmdQueue();
+
+    Fail(DirectCmdListAlloc->Reset());
+
+    Fail(CmdList->Reset(
+        DirectCmdListAlloc.Get(),
+        nullptr));
+
+    Textures.clear();
+    Textures.reserve(materials.size());
+
+    for (UINT i = 0;
+        i < static_cast<UINT>(materials.size());
+        ++i)
+    {
+
+        CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(
+            HeapCBV->GetCPUDescriptorHandleForHeapStart(),
+            ObjectsMax + i,
+            DescSizeCbvSrvUav);
+
+        try
+        {
+            Textures.push_back(
+                TextureLoader::Load(
+                    Device.Get(),
+                    CmdList.Get(),
+                    materials[i].TexturePath,
+                    srvHandle));
+        }
+        catch (const std::exception& error)
+        {
+            throw std::runtime_error(
+                "Failed to create texture for material '" +
+                materials[i].Name +
+                "', path '" +
+                materials[i].TexturePath +
+                "': " +
+                error.what());
+        }
+    }
+
+    Fail(CmdList->Close());
+
+    ID3D12CommandList* commandLists[] =
+    {
+        CmdList.Get()
+    };
+
+    CmdQueue->ExecuteCommandLists(1, commandLists);
+
+    FlushCmdQueue();
+
+    for (TextureResource& texture : Textures)
+    {
+        texture.UploadBuffer.Reset();
+    }
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE App::GetBackBuffer() const
@@ -296,8 +400,23 @@ void App::BuildFallbackCube()
 
 void App::ParseFile()
 {
+    /*VerticesCPU.clear();
+    IndicesCPU.clear();
+
+    VerticesCPU = objParser.GetVertices();
+    IndicesCPU = objParser.GetIndices();*/
+
     VerticesCPU.clear();
     IndicesCPU.clear();
+
+    //Path = "../objs/American_flamingo.obj";
+    Path = "../objs/sponza/sponza.obj";
+
+    if (!objParser.Load(Path))
+    {
+        throw std::runtime_error(
+            "Failed to load OBJ model: " + Path);
+    }
 
     VerticesCPU = objParser.GetVertices();
     IndicesCPU = objParser.GetIndices();
@@ -416,31 +535,64 @@ void App::OnMouseUp()
 
 void App::OnMouseMove(WPARAM State, int dx, int dy)
 {
+    if (GetFocus() == nullptr)
+    {
+        MouseLeft = false;
+        return;
+    }
+
     if ((State & MK_LBUTTON) || MouseLeft)
     {
-        const float angleSpeed = 0.01f;
+        CameraY += static_cast<float>(dx) * 0.003f;
+        CameraX -= static_cast<float>(dy) * 0.003f;
 
-        Theta += dx * angleSpeed;
-        Phi -= dy * angleSpeed;
+        const float Limit = XM_PIDIV2 - 0.01f;
 
-        if (Phi < 0.1f)
-            Phi = 0.1f;
-        if (Phi > XM_PI - 0.1f)
-            Phi = XM_PI - 0.1f;
+        if (CameraX > Limit)
+            CameraX = Limit;
+
+        if (CameraX < -Limit)
+            CameraX = -Limit;
     }
 }
 
 void App::Update(const GameTimer& gt)
 {
-    const float x = Radius * sinf(Phi) * cosf(Theta);
-    const float z = Radius * sinf(Phi) * sinf(Theta);
-    const float y = Radius * cosf(Phi);
+    const float cameraDt = (std::min)(gt.DeltaTime(), 0.05f);
 
-    const Vector3 eyePos(x, y, z);
-    const Vector3 target(0.0f, 0.0f, 0.0f);
+    Vector3 forward(sinf(CameraY) * cosf(CameraX), sinf(CameraX), -cosf(CameraY) * cosf(CameraX));
+    forward.Normalize();
+
     const Vector3 up(0.0f, 1.0f, 0.0f);
 
-    View = Matrix::CreateLookAt(eyePos, target, up);
+    Vector3 right = forward.Cross(up);
+    right.Normalize();
+
+    Vector3 movement = Vector3::Zero;
+
+    if (GetFocus() != nullptr)
+    {
+        if (GetAsyncKeyState('W') & 0x8000)
+            movement += forward;
+
+        if (GetAsyncKeyState('S') & 0x8000)
+            movement -= forward;
+
+        if (GetAsyncKeyState('D') & 0x8000)
+            movement += right;
+
+        if (GetAsyncKeyState('A') & 0x8000)
+            movement -= right;
+    }
+
+    if (movement.LengthSquared() > 0.000001f)
+    {
+        movement.Normalize();
+
+        CameraPosition += movement * CameraMoveSpeed * cameraDt;
+    }
+
+    View = Matrix::CreateLookAt(CameraPosition, CameraPosition + forward, up);
 
     const float t = gt.TotalTime();
     Vector3 lightDir(std::cosf(t * 0.8f), -0.65f, std::sinf(t * 0.8f));
@@ -450,11 +602,13 @@ void App::Update(const GameTimer& gt)
 
     EyeConstants passData;
     passData.ViewProj = viewProj;
+
     passData.LightDir = Vector4(lightDir.x, lightDir.y, lightDir.z, 0.0f);
-    passData.EyePos = Vector4(eyePos.x, eyePos.y, eyePos.z, 1.0f);
+    passData.EyePos = Vector4(CameraPosition.x, CameraPosition.y, CameraPosition.z, 1.0f);
     passData.AmbientStrength = 0.22f;
     passData.SpecularStrength = 0.70f;
     passData.SpecularPower = 48.0f;
+    passData.Time = gt.TotalTime();
 
     Eye->CopyData(0, passData);
 
@@ -462,8 +616,9 @@ void App::Update(const GameTimer& gt)
     {
         Objects[i]->Update(gt.DeltaTime());
 
-        ObjectConstants objData;
+        ObjectConstants objData{};
         objData.World = Objects[i]->WorldMatrix().Transpose();
+
         objData.Color = Objects[i]->Color();
 
         Obj->CopyData(static_cast<int>(i), objData);
@@ -511,20 +666,91 @@ void App::CreateConstantBufferView()
     Device->CreateConstantBufferView(&passDesc, passHandle);
 }
 
+//void App::CreateRootSignature()
+//{
+//    CD3DX12_DESCRIPTOR_RANGE objCbvTable;
+//    objCbvTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+//
+//    CD3DX12_ROOT_PARAMETER slotRootParameter[2] = {};
+//    slotRootParameter[0].InitAsDescriptorTable(1, &objCbvTable);
+//    slotRootParameter[1].InitAsConstantBufferView(1);
+//
+//    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(
+//        2,
+//        slotRootParameter,
+//        0,
+//        nullptr,
+//        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+//
+//    ComPtr<ID3DBlob> serializedRootSig = nullptr;
+//    ComPtr<ID3DBlob> errorBlob = nullptr;
+//
+//    HRESULT hr = D3D12SerializeRootSignature(
+//        &rootSigDesc,
+//        D3D_ROOT_SIGNATURE_VERSION_1,
+//        serializedRootSig.GetAddressOf(),
+//        errorBlob.GetAddressOf());
+//
+//    if (errorBlob)
+//        OutputDebugStringA(static_cast<char*>(errorBlob->GetBufferPointer()));
+//
+//    Fail(hr);
+//
+//    Fail(
+//        Device->CreateRootSignature(
+//            0,
+//            serializedRootSig->GetBufferPointer(),
+//            serializedRootSig->GetBufferSize(),
+//            IID_PPV_ARGS(&RootSign)));
+//}
+
 void App::CreateRootSignature()
 {
     CD3DX12_DESCRIPTOR_RANGE objCbvTable;
-    objCbvTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+    objCbvTable.Init(
+        D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+        1,
+        0);
 
-    CD3DX12_ROOT_PARAMETER slotRootParameter[2] = {};
-    slotRootParameter[0].InitAsDescriptorTable(1, &objCbvTable);
+    CD3DX12_DESCRIPTOR_RANGE textureSrvTable;
+    textureSrvTable.Init(
+        D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+        1,
+        0);
+
+    CD3DX12_ROOT_PARAMETER slotRootParameter[4] = {};
+
+    slotRootParameter[0].InitAsDescriptorTable(
+        1,
+        &objCbvTable);
+
     slotRootParameter[1].InitAsConstantBufferView(1);
 
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(
+    slotRootParameter[2].InitAsDescriptorTable(
+        1,
+        &textureSrvTable,
+        D3D12_SHADER_VISIBILITY_PIXEL);
+
+    slotRootParameter[3].InitAsConstants(
+        4,
         2,
-        slotRootParameter,
         0,
-        nullptr,
+        D3D12_SHADER_VISIBILITY_PIXEL);
+
+    CD3DX12_STATIC_SAMPLER_DESC sampler(
+        0,
+        D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(
+        4,
+        slotRootParameter,
+        1,
+        &sampler,
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> serializedRootSig = nullptr;
@@ -537,7 +763,10 @@ void App::CreateRootSignature()
         errorBlob.GetAddressOf());
 
     if (errorBlob)
-        OutputDebugStringA(static_cast<char*>(errorBlob->GetBufferPointer()));
+    {
+        OutputDebugStringA(
+            static_cast<char*>(errorBlob->GetBufferPointer()));
+    }
 
     Fail(hr);
 
@@ -671,22 +900,44 @@ void App::Draw(const GameTimer&)
     FlushCmdQueue();
 }
 
+// Это сцена для 4ой лабы 1го семестра КГ
+
+//void App::Scene()
+//{
+//    Objects.clear();
+//
+//    for (int x = 0; x < 3; x++) {
+//        for (int y = 0; y < 3; y++) {
+//            for (int z = 0; z < 3; z++) {
+//                auto cube = std::make_unique<MeshObject>(x * 9 + y * 3 + z, vBuff[0], iBuff, cnt);
+//                cube->SetPosition(Vector3(-0.6f + x * 0.6f, -0.6f + y * 0.6f, -0.6f + z * 0.6f));
+//                cube->SetScale(Vector3(0.5f, 0.5f, 0.5f));
+//                cube->SetRotation(Vector3(0.0f, 0.0f, 0.0f));
+//
+//                cube->SetColor(Vector4(0.28f * x, 0.19f * y, 0.06f * z, 0.7f));
+//
+//                Objects.push_back(std::move(cube));
+//            }
+//        }
+//    }
+//}
+
 void App::Scene()
 {
     Objects.clear();
 
-    for (int x = 0; x < 3; x++) {
-        for (int y = 0; y < 3; y++) {
-            for (int z = 0; z < 3; z++) {
-                auto cube = std::make_unique<MeshObject>(x * 9 + y * 3 + z, vBuff[0], iBuff, cnt);
-                cube->SetPosition(Vector3(-0.6f + x * 0.6f, -0.6f + y * 0.6f, -0.6f + z * 0.6f));
-                cube->SetScale(Vector3(0.5f, 0.5f, 0.5f));
-                cube->SetRotation(Vector3(0.0f, 0.0f, 0.0f));
+    auto mesh = std::make_unique<MeshObject>(0, vBuff[0], iBuff, cnt);
 
-                cube->SetColor(Vector4(0.28f * x, 0.19f * y, 0.06f * z, 0.7f));
+    mesh->SetMaterials(objParser.GetParts(), objParser.GetMaterials(), ObjectsMax);
 
-                Objects.push_back(std::move(cube));
-            }
-        }
-    }
+    mesh->SetPosition(Vector3(0.0f, 0.0f, 0.0f));
+    mesh->SetScale(Vector3(1.0f, 1.0f, 1.0f));
+    // Это для отрисовки фламинго (он почему-то перевернулся)
+    //mesh->SetRotation(Vector3(-XM_PIDIV2, 0.0f, 0.0f));
+    mesh->SetRotation(Vector3(0.0f, 0.0f, 0.0f));
+    mesh->SetRotationSpeedY(0.0f);
+
+    mesh->SetColor(Vector4(1.0f, 1.0f, 1.0f, 1.0f));
+
+    Objects.push_back(std::move(mesh));
 }

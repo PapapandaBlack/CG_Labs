@@ -130,6 +130,8 @@
   <ItemGroup>
     <ClCompile Include="game_object.cpp" />
     <ClCompile Include="object_loader.cpp" />
+    <ClCompile Include="texture_loader.cpp" />
+    <ClCompile Include="texture_model.cpp" />
     <ClCompile Include="utils.cpp" />
     <ClCompile Include="app.cpp" />
     <ClCompile Include="game_timer.cpp" />
@@ -138,6 +140,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="object_loader.h" />
+    <ClInclude Include="texture_loader.h" />
+    <ClInclude Include="texture_model.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="app.h" />
     <ClInclude Include="game_object.h" />

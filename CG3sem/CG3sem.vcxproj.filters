@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Исходные файлы\Textures">
+      <UniqueIdentifier>{3c68bed8-e09e-44ad-859a-da438a740fdc}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="winmain.cpp">
@@ -35,6 +38,12 @@
     </ClCompile>
     <ClCompile Include="object_loader.cpp">
       <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="texture_model.cpp">
+      <Filter>Исходные файлы\Textures</Filter>
+    </ClCompile>
+    <ClCompile Include="texture_loader.cpp">
+      <Filter>Исходные файлы\Textures</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -64,6 +73,12 @@
     </ClInclude>
     <ClInclude Include="object_loader.h">
       <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="texture_model.h">
+      <Filter>Исходные файлы\Textures</Filter>
+    </ClInclude>
+    <ClInclude Include="texture_loader.h">
+      <Filter>Исходные файлы\Textures</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

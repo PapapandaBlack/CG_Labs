@@ -20,7 +20,7 @@ struct EyeConstants
     float AmbientStrength = 0.2f;
     float SpecularStrength = 0.6f;
     float SpecularPower = 15.0f;
-    float Padding = 0.0f;
+    float Time = 0.0f;
 };
 
 struct ObjectConstants

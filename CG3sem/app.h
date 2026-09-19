@@ -15,6 +15,8 @@
 #include "game_timer.h"
 #include "game_object.h"
 #include "object_loader.h"
+#include "texture_model.h"
+#include "texture_loader.h"
 
 using namespace Microsoft::WRL;
 using namespace DirectX;
@@ -71,6 +73,8 @@ private:
     void EnableDebug();
     void Scene();
     void BuildFallbackCube();
+
+    void CreateTextures();
 
 private:
     DXGI_FORMAT BackBuffFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -130,20 +134,25 @@ private:
     Matrix Proj = Matrix::Identity;
 
     POINT MousePos{};
-    float Theta = XM_PIDIV4;
-    float Phi = XM_PIDIV4;
-    float Radius = 6.0f;
     bool MouseLeft = false;
+    Vector3 CameraPosition = Vector3(0.0f, 0.0f, 3.0f);
+    float CameraX = 0.0f;
+    float CameraY = 0.0f;
+    float CameraMoveSpeed = 1.0f;
 
     std::vector<std::unique_ptr<GameObj>> Objects;
     static constexpr UINT ObjectsMax = 64;
     UINT indexCBV = ObjectsMax - 1;
 
-    ObjLoader objParser;
+    //ObjLoader objParser;
+    TexturedModel objParser;
     std::vector<Vertex> VerticesCPU;
     std::vector<UINT> IndicesCPU;
     bool objLoader = false;
     std::string Path;
+
+    std::vector<TextureResource> Textures;
+    static constexpr UINT TextureMax = 256;
 };
 
 #endif

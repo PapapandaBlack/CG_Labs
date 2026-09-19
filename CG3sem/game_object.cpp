@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include "game_object.h"
 
 using namespace DirectX;
@@ -40,18 +42,115 @@ MeshObject::MeshObject(
 {
 }
 
+void MeshObject::SetMaterials(
+    const std::vector<MeshPart>& parts,
+    const std::vector<SurfaceMaterial>& materials,
+    UINT textureSrvStart)
+{
+    if (parts.empty() || materials.empty())
+    {
+        throw std::runtime_error(
+            "MeshObject requires mesh parts and materials");
+    }
+
+    for (const MeshPart& part : parts)
+    {
+        if (part.MaterialIndex >= materials.size())
+        {
+            throw std::runtime_error(
+                "Mesh part has an invalid material index");
+        }
+
+        if (part.StartIndex > m_indexCount ||
+            part.IndexCount > m_indexCount - part.StartIndex)
+        {
+            throw std::runtime_error(
+                "Mesh part has an invalid index range");
+        }
+    }
+
+    m_parts = parts;
+    m_materials = materials;
+    m_textureSrvStart = textureSrvStart;
+}
+
+//void MeshObject::Draw(
+//    ID3D12GraphicsCommandList* cmdList,
+//    D3D12_GPU_DESCRIPTOR_HANDLE cbvHeapStart,
+//    UINT cbvDescriptorSize) const
+//{
+//    cmdList->IASetVertexBuffers(0, 1, &m_vbv);
+//    cmdList->IASetIndexBuffer(&m_ibv);
+//
+//    CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(cbvHeapStart);
+//    cbvHandle.Offset(static_cast<INT>(cbvIndex), cbvDescriptorSize);
+//
+//    cmdList->SetGraphicsRootDescriptorTable(0, cbvHandle);
+//
+//    cmdList->DrawIndexedInstanced(m_indexCount, 1, 0, 0, 0);
+//}
+
 void MeshObject::Draw(
     ID3D12GraphicsCommandList* cmdList,
     D3D12_GPU_DESCRIPTOR_HANDLE cbvHeapStart,
     UINT cbvDescriptorSize) const
 {
+    if (m_parts.empty())
+    {
+        throw std::runtime_error(
+            "Call MeshObject::SetMaterials before drawing");
+    }
+
     cmdList->IASetVertexBuffers(0, 1, &m_vbv);
     cmdList->IASetIndexBuffer(&m_ibv);
 
     CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(cbvHeapStart);
-    cbvHandle.Offset(static_cast<INT>(cbvIndex), cbvDescriptorSize);
 
-    cmdList->SetGraphicsRootDescriptorTable(0, cbvHandle);
+    cbvHandle.Offset(
+        static_cast<INT>(cbvIndex),
+        cbvDescriptorSize);
 
-    cmdList->DrawIndexedInstanced(m_indexCount, 1, 0, 0, 0);
+    cmdList->SetGraphicsRootDescriptorTable(
+        0,
+        cbvHandle);
+
+    for (const MeshPart& part : m_parts)
+    {
+        const SurfaceMaterial& material =
+            m_materials[part.MaterialIndex];
+
+        const UINT srvIndex =
+            m_textureSrvStart + part.MaterialIndex;
+
+        CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(cbvHeapStart);
+
+        srvHandle.Offset(
+            static_cast<INT>(srvIndex),
+            cbvDescriptorSize);
+
+        cmdList->SetGraphicsRootDescriptorTable(
+            2,
+            srvHandle);
+
+        const float diffuseColor[4] =
+        {
+            material.Diffuse.x,
+            material.Diffuse.y,
+            material.Diffuse.z,
+            material.Diffuse.w
+        };
+
+        cmdList->SetGraphicsRoot32BitConstants(
+            3,
+            4,
+            diffuseColor,
+            0);
+
+        cmdList->DrawIndexedInstanced(
+            part.IndexCount,
+            1,
+            part.StartIndex,
+            0,
+            0);
+    }
 }
