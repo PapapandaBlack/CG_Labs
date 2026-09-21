@@ -129,7 +129,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="game_object.cpp" />
+    <ClCompile Include="gbuffer.cpp" />
     <ClCompile Include="object_loader.cpp" />
+    <ClCompile Include="render_system.cpp" />
     <ClCompile Include="texture_loader.cpp" />
     <ClCompile Include="texture_model.cpp" />
     <ClCompile Include="utils.cpp" />
@@ -139,7 +141,9 @@
     <ClCompile Include="winmain.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="gbuffer.h" />
     <ClInclude Include="object_loader.h" />
+    <ClInclude Include="render_system.h" />
     <ClInclude Include="texture_loader.h" />
     <ClInclude Include="texture_model.h" />
     <ClInclude Include="utils.h" />

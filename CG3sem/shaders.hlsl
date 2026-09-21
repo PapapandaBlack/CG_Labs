@@ -4,6 +4,14 @@ cbuffer cbPerObject : register(b0)
     float4 gColor;
 };
 
+struct LightData
+{
+    float4 PositionRange;
+    float4 ColorIntensity;
+    float4 DirectionType;
+    float4 SpotAngles;
+};
+
 cbuffer cbPass : register(b1)
 {
     float4x4 gViewProj;
@@ -14,6 +22,11 @@ cbuffer cbPass : register(b1)
     float gSpecularStrength;
     float gSpecularPower;
     float gTime;
+
+    uint gLightCount;
+    uint3 gLightPadding;
+
+    LightData gLights[16];
 };
 
 cbuffer cbMaterial : register(b2)
@@ -55,35 +68,26 @@ PSInput VS(VSInput vin)
     return vout;
 }
 
-float4 PS(PSInput pin) : SV_Target
+struct GBufferOutput
+{
+    float4 AlbedoSpecular : SV_Target0;
+    float4 WorldPosition : SV_Target1;
+    float4 Normal : SV_Target2;
+};
+
+GBufferOutput PS(PSInput pin)
 {
     const float amplitude = 0.1f;
     const float period = 2.0f;
     float offsetY = amplitude * sin(gTime * 6.2831853f / period);
     float2 animatedUV = pin.TexC + float2(0.0f, offsetY);
-
     float4 textureColor = gDiffuseTexture.Sample(gDiffuseSampler, animatedUV);
-
     float4 surfaceColor = textureColor * gMaterialDiffuse * gColor;
+    GBufferOutput output;
 
-    float3 N = normalize(pin.NormalW);
-    float3 L = normalize(-gLightDir.xyz);
-    float3 V = normalize(gEyePosW.xyz - pin.PosW);
-    float3 R = reflect(-L, N);
+    output.AlbedoSpecular = float4(surfaceColor.rgb, saturate(gSpecularStrength));
+    output.WorldPosition = float4(pin.PosW, 1.0f);
+    output.Normal = float4(normalize(pin.NormalW), 0.0f);
 
-    float ambient = gAmbientStrength;
-    float diffuse = max(dot(N, L), 0.0f);
-
-    float specular = 0.0f;
-
-    if (diffuse > 0.0f)
-    {
-        specular = pow(max(dot(R, V), 0.0f), gSpecularPower) * gSpecularStrength;
-    }
-
-    float3 finalColor = surfaceColor.rgb * (ambient + diffuse) + specular.xxx;
-
-    finalColor = saturate(finalColor);
-
-    return float4(finalColor, surfaceColor.a);
+    return output;
 }

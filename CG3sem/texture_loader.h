@@ -1,3 +1,6 @@
+#ifndef TEXTURE_LOAD
+#define TEXTURE_LOAD
+
 #pragma once
 
 #include <Windows.h>
@@ -22,3 +25,5 @@ public:
         const std::string& filename,
         D3D12_CPU_DESCRIPTOR_HANDLE srvHandle);
 };
+
+#endif

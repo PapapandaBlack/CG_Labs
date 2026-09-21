@@ -5,9 +5,6 @@
 
 #include "texture_loader.h"
 
-//#pragma comment(lib, "windowscodecs.lib")
-//#pragma comment(lib, "ole32.lib")
-
 using namespace Microsoft::WRL;
 
 static void CheckResult(HRESULT result, const char* operation)

@@ -17,6 +17,7 @@
 #include "object_loader.h"
 #include "texture_model.h"
 #include "texture_loader.h"
+#include "render_system.h"
 
 using namespace Microsoft::WRL;
 using namespace DirectX;
@@ -153,6 +154,11 @@ private:
 
     std::vector<TextureResource> Textures;
     static constexpr UINT TextureMax = 256;
+
+    static constexpr UINT GBufferSrvStart = ObjectsMax + TextureMax;
+    static constexpr UINT DescriptorCount = GBufferSrvStart + GBuffer::TargetCount;
+
+    RenderingSystem Renderer;
 };
 
 #endif

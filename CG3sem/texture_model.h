@@ -1,3 +1,6 @@
+#ifndef TEXTURE_MODEL
+#define TEXTURE_MODEL
+
 #pragma once
 
 #include <string>
@@ -53,3 +56,5 @@ private:
     std::vector<SurfaceMaterial> Materials;
     std::vector<MeshPart> Parts;
 };
+
+#endif

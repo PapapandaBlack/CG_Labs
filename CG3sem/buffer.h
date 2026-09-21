@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <SimpleMath.h>
+#include <array>
 
 #include "utils.h"
 #include "fail.h"
@@ -11,16 +12,41 @@ using namespace Microsoft::WRL;
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
+static constexpr UINT MaxLights = 16;
+
+enum class LightType : UINT
+{
+    Directional = 0,
+    Point = 1,
+    Spot = 2
+};
+
+struct LightData
+{
+    Vector4 PositionRange = Vector4(0.0f, 0.0f, 0.0f, 1.0f);
+    Vector4 ColorIntensity = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+    Vector4 DirectionType = Vector4(0.0f, -1.0f, 0.0f, 0.0f);
+    Vector4 SpotAngles = Vector4(1.0f, 0.0f, 0.0f, 0.0f);
+};
+
+static_assert(sizeof(LightData) == 64, "LightData must match HLSL layout");
+
 struct EyeConstants
 {
     Matrix ViewProj = Matrix::Identity;
+
     Vector4 LightDir = Vector4(0.0f, 0.45f, 0.45f, 0.0f);
-    Vector4 EyePos = Vector4(0.0f, 0.0f, 0.0f, 0.0f);
+    Vector4 EyePos =  Vector4(0.0f, 0.0f, 0.0f, 1.0f);
 
     float AmbientStrength = 0.2f;
     float SpecularStrength = 0.6f;
     float SpecularPower = 15.0f;
     float Time = 0.0f;
+
+    UINT LightCount = 0;
+    UINT LightPadding[3] = {};
+
+    std::array<LightData, MaxLights> Lights{};
 };
 
 struct ObjectConstants

@@ -16,6 +16,9 @@
     <Filter Include="Исходные файлы\Textures">
       <UniqueIdentifier>{3c68bed8-e09e-44ad-859a-da438a740fdc}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Исходные файлы\Rendering">
+      <UniqueIdentifier>{7bb6b373-9cc6-40ba-97b1-aacce42091fe}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="winmain.cpp">
@@ -44,6 +47,12 @@
     </ClCompile>
     <ClCompile Include="texture_loader.cpp">
       <Filter>Исходные файлы\Textures</Filter>
+    </ClCompile>
+    <ClCompile Include="render_system.cpp">
+      <Filter>Исходные файлы\Rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="gbuffer.cpp">
+      <Filter>Исходные файлы\Rendering</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -79,6 +88,12 @@
     </ClInclude>
     <ClInclude Include="texture_loader.h">
       <Filter>Исходные файлы\Textures</Filter>
+    </ClInclude>
+    <ClInclude Include="render_system.h">
+      <Filter>Исходные файлы\Rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="gbuffer.h">
+      <Filter>Исходные файлы\Rendering</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

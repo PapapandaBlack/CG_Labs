@@ -121,43 +121,21 @@ void App::CreateRTVAndDSVDescriptorHeaps()
     Fail(Device->CreateDescriptorHeap(&DSVHeapDesc, IID_PPV_ARGS(&HeapDSV)));
 }
 
-//void App::CreateCBVDescriptorHeap()
-//{
-//    D3D12_DESCRIPTOR_HEAP_DESC CBVHeapDesc = {};
-//    CBVHeapDesc.NumDescriptors = ObjectsMax;
-//    CBVHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-//    CBVHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-//    CBVHeapDesc.NodeMask = 0;
-//
-//    Fail(Device->CreateDescriptorHeap(&CBVHeapDesc, IID_PPV_ARGS(&HeapCBV)));
-//}
-
 void App::CreateCBVDescriptorHeap()
 {
     if (objParser.GetMaterials().size() > TextureMax)
     {
-        throw std::runtime_error(
-            "Too many materials. Maximum: " +
-            std::to_string(TextureMax));
+        throw std::runtime_error("Too many materials. Maximum: " + std::to_string(TextureMax));
     }
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDescription = {};
-
-    heapDescription.NumDescriptors =
-        ObjectsMax + TextureMax;
-
-    heapDescription.Type =
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-
-    heapDescription.Flags =
-        D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-
+    heapDescription.NumDescriptors = DescriptorCount;
+    heapDescription.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    heapDescription.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     heapDescription.NodeMask = 0;
 
-    Fail(Device->CreateDescriptorHeap(
-        &heapDescription,
-        IID_PPV_ARGS(&HeapCBV)));
-
+    Fail(Device->CreateDescriptorHeap(&heapDescription, IID_PPV_ARGS(&HeapCBV)));
+    Renderer.Initialize(Device.Get(), static_cast<UINT>(fWidth), static_cast<UINT>(fHeight), HeapCBV.Get(), DescSizeCbvSrvUav, GBufferSrvStart);
     CreateTextures();
 }
 
@@ -400,12 +378,6 @@ void App::BuildFallbackCube()
 
 void App::ParseFile()
 {
-    /*VerticesCPU.clear();
-    IndicesCPU.clear();
-
-    VerticesCPU = objParser.GetVertices();
-    IndicesCPU = objParser.GetIndices();*/
-
     VerticesCPU.clear();
     IndicesCPU.clear();
 
@@ -559,15 +531,15 @@ void App::OnMouseMove(WPARAM State, int dx, int dy)
 void App::Update(const GameTimer& gt)
 {
     const float cameraDt = (std::min)(gt.DeltaTime(), 0.05f);
-
+    
     Vector3 forward(sinf(CameraY) * cosf(CameraX), sinf(CameraX), -cosf(CameraY) * cosf(CameraX));
     forward.Normalize();
-
+    
     const Vector3 up(0.0f, 1.0f, 0.0f);
-
+    
     Vector3 right = forward.Cross(up);
     right.Normalize();
-
+    
     Vector3 movement = Vector3::Zero;
 
     if (GetFocus() != nullptr)
@@ -588,7 +560,7 @@ void App::Update(const GameTimer& gt)
     if (movement.LengthSquared() > 0.000001f)
     {
         movement.Normalize();
-
+        
         CameraPosition += movement * CameraMoveSpeed * cameraDt;
     }
 
@@ -600,15 +572,47 @@ void App::Update(const GameTimer& gt)
 
     Matrix viewProj = (View * Proj).Transpose();
 
-    EyeConstants passData;
+    EyeConstants passData{};
     passData.ViewProj = viewProj;
 
     passData.LightDir = Vector4(lightDir.x, lightDir.y, lightDir.z, 0.0f);
     passData.EyePos = Vector4(CameraPosition.x, CameraPosition.y, CameraPosition.z, 1.0f);
-    passData.AmbientStrength = 0.22f;
+    passData.AmbientStrength = 0.2f;
     passData.SpecularStrength = 0.70f;
     passData.SpecularPower = 48.0f;
-    passData.Time = gt.TotalTime();
+    passData.Time = t;
+    passData.LightCount = 4;
+
+    LightData& directional = passData.Lights[0];
+
+    directional.PositionRange = Vector4(0.0f, 0.0f, 0.0f, 0.0f);
+    directional.ColorIntensity = Vector4( 1.0f, 0.95f, 0.85f, 0.35f);
+    directional.DirectionType = Vector4(lightDir.x, lightDir.y, lightDir.z, static_cast<float>(LightType::Directional));
+    directional.SpotAngles = Vector4(1.0f, 0.0f, 0.0f, 0.0f);
+
+    LightData& warmPoint = passData.Lights[1];
+
+    warmPoint.PositionRange = Vector4(-0.5f, 0.25f, 0.0f, 1.5f);
+    warmPoint.ColorIntensity = Vector4(1.0f, 0.25f, 0.08f, 2.0f);
+    warmPoint.DirectionType = Vector4(0.0f, -1.0f, 0.0f, static_cast<float>(LightType::Point));
+    warmPoint.SpotAngles = Vector4(1.0f, 0.0f, 0.0f, 0.0f);
+
+    LightData& coolPoint = passData.Lights[2];
+
+    coolPoint.PositionRange = Vector4(0.5f, 0.25f, 0.0f, 1.5f);
+    coolPoint.ColorIntensity = Vector4(0.10f, 0.40f, 1.0f, 2.0f);
+    coolPoint.DirectionType = Vector4(0.0f, -1.0f, 0.0f, static_cast<float>(LightType::Point));
+    coolPoint.SpotAngles = Vector4(1.0f, 0.0f, 0.0f, 0.0f);
+
+    LightData& spot = passData.Lights[3];
+
+    Vector3 spotDirection(0.0f, -1.0f, 0.0f);
+    spotDirection.Normalize();
+
+    spot.PositionRange = Vector4(0.0f, 0.6f, 0.0f, 2.0f);
+    spot.ColorIntensity = Vector4(1.0f, 0.95f, 0.70f, 3.0f);
+    spot.DirectionType = Vector4(spotDirection.x, spotDirection.y, spotDirection.z, static_cast<float>(LightType::Spot));
+    spot.SpotAngles = Vector4(cosf(XMConvertToRadians(20.0f)), cosf(XMConvertToRadians(35.0f)), 0.0f, 0.0f);
 
     Eye->CopyData(0, passData);
 
@@ -616,12 +620,12 @@ void App::Update(const GameTimer& gt)
     {
         Objects[i]->Update(gt.DeltaTime());
 
-        ObjectConstants objData{};
-        objData.World = Objects[i]->WorldMatrix().Transpose();
+        ObjectConstants objectData{};
+        objectData.World = Objects[i]->WorldMatrix().Transpose();
 
-        objData.Color = Objects[i]->Color();
+        objectData.Color = Objects[i]->Color();
 
-        Obj->CopyData(static_cast<int>(i), objData);
+        Obj->CopyData(static_cast<int>(i), objectData);
     }
 }
 
@@ -799,16 +803,8 @@ void App::CreatePSO()
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.InputLayout = { Input.data(), static_cast<UINT>(Input.size()) };
     psoDesc.pRootSignature = RootSign.Get();
-    psoDesc.VS =
-    {
-        reinterpret_cast<BYTE*>(mvsByteCode->GetBufferPointer()),
-        mvsByteCode->GetBufferSize()
-    };
-    psoDesc.PS =
-    {
-        reinterpret_cast<BYTE*>(mpsByteCode->GetBufferPointer()),
-        mpsByteCode->GetBufferSize()
-    };
+    psoDesc.VS = {reinterpret_cast<BYTE*>(mvsByteCode->GetBufferPointer()), mvsByteCode->GetBufferSize()};
+    psoDesc.PS = {reinterpret_cast<BYTE*>(mpsByteCode->GetBufferPointer()), mpsByteCode->GetBufferSize()};
 
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
@@ -818,13 +814,20 @@ void App::CreatePSO()
     psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
     psoDesc.SampleMask = UINT_MAX;
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = BackBuffFormat;
+    psoDesc.NumRenderTargets = GBuffer::TargetCount;
+
+    for (UINT i = 0; i < GBuffer::TargetCount; ++i)
+    {
+        psoDesc.RTVFormats[i] = GBuffer::Format(i);
+    }
+
     psoDesc.DSVFormat = DepthStencilFormat;
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleDesc.Quality = 0;
 
     Fail(Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&PSO)));
+
+    Renderer.CreateLightingPipeline(Device.Get(), BackBuffFormat);
 }
 
 void App::InitProjectionMatrix()
@@ -847,54 +850,43 @@ void App::Draw(const GameTimer&)
     CmdList->RSSetViewports(1, &ViewPort);
     CmdList->RSSetScissorRects(1, &sRect);
 
-    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        CurrentBackBuffer(),
-        D3D12_RESOURCE_STATE_PRESENT,
-        D3D12_RESOURCE_STATE_RENDER_TARGET);
-    CmdList->ResourceBarrier(1, &barrier);
+    ID3D12DescriptorHeap* descriptorHeaps[] =
+    {
+        HeapCBV.Get()
+    };
 
-    CmdList->ClearRenderTargetView(GetBackBuffer(), Colors::LightSteelBlue, 0, nullptr);
-    CmdList->ClearDepthStencilView(
-        GetDSV(),
-        D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
-        1.0f,
-        0,
-        0,
-        nullptr);
-
-    D3D12_CPU_DESCRIPTOR_HANDLE bb = GetBackBuffer();
-    D3D12_CPU_DESCRIPTOR_HANDLE dsv = GetDSV();
-    CmdList->OMSetRenderTargets(1, &bb, true, &dsv);
-
-    ID3D12DescriptorHeap* descriptorHeaps[] = { HeapCBV.Get() };
     CmdList->SetDescriptorHeaps(1, descriptorHeaps);
+
+    Renderer.BeginGeometry( CmdList.Get(), GetDSV());
+
     CmdList->SetGraphicsRootSignature(RootSign.Get());
     CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    CmdList->SetGraphicsRootConstantBufferView(1, Eye->Resource()->GetGPUVirtualAddress());
 
-    CmdList->SetGraphicsRootConstantBufferView(
-        1,
-        Eye->Resource()->GetGPUVirtualAddress());
+    Renderer.DrawOpaque(CmdList.Get(), HeapCBV.Get(), DescSizeCbvSrvUav, Objects);
+    Renderer.EndGeometry(CmdList.Get());
 
-    const D3D12_GPU_DESCRIPTOR_HANDLE cbvHeapStart =
-        HeapCBV->GetGPUDescriptorHandleForHeapStart();
+    const auto toRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-    for (const auto& obj : Objects)
-    {
-        obj->Draw(CmdList.Get(), cbvHeapStart, DescSizeCbvSrvUav);
-    }
+    CmdList->ResourceBarrier(1, &toRenderTarget);
 
-    CD3DX12_RESOURCE_BARRIER barrier2 = CD3DX12_RESOURCE_BARRIER::Transition(
-        CurrentBackBuffer(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_PRESENT);
-    CmdList->ResourceBarrier(1, &barrier2);
+    Renderer.DrawLighting(CmdList.Get(), GetBackBuffer(), Eye->Resource()->GetGPUVirtualAddress());
+
+    const auto toPresent = CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+
+    CmdList->ResourceBarrier(1, &toPresent);
 
     Fail(CmdList->Close());
 
-    ID3D12CommandList* cmdLists[] = { CmdList.Get() };
-    CmdQueue->ExecuteCommandLists(1, cmdLists);
+    ID3D12CommandList* commandLists[] =
+    {
+        CmdList.Get()
+    };
+
+    CmdQueue->ExecuteCommandLists(1, commandLists);
 
     Fail(SwapChain->Present(0, 0));
+
     curBackBuff = (curBackBuff + 1) % 2;
 
     FlushCmdQueue();
